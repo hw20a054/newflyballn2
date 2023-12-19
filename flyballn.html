@@ -1,0 +1,274 @@
+<html>
+
+<head>
+    <title>three.js + ar.js</title>
+    <meta name="viewport" content="width=device-width, viewport-fit=cover, shrink-to-fit=no" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        .wrapper {
+            position: relative;
+            overflow: hidden;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrapper">
+        <canvas></canvas>
+    </div>
+    <!--❶ three.jsとAR.jsを読み込む-->
+    <script src="https://unpkg.com/three@0.127.0/build/three.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/3.3.3/three.js/build/ar.js"></script>
+    <script async>
+        const renderer = new THREE.WebGLRenderer({
+            canvas: document.querySelector('canvas'),
+            antialias: true,
+            alpha: true
+        });
+        const camera = new THREE.PerspectiveCamera();
+        const scene = new THREE.Scene();
+        const markerRoot = new THREE.Group();
+        const arToolkitContext = new THREEx.ArToolkitContext({
+            cameraParametersUrl: './camera.dat', // ❷ camera.datを読み込む
+            detectionMode: 'mono'
+        });
+        const arToolkitSource = new THREEx.ArToolkitSource({
+            sourceType: 'webcam'
+        });
+        const arMarkerControl = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
+            type: 'pattern',
+            patternUrl: 'pattern-balloon.patt' // ❸ pattern.pattを読み込む
+        });
+
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        window.addEventListener('resize', handleResize, {
+            passive: true
+        });
+
+        arToolkitContext.init(() => {
+            camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix());
+        });
+
+        arToolkitSource.init(() => {
+            document.querySelector('.wrapper').appendChild(arToolkitSource.domElement); // ❹ videoタグを.wrapper配下に移動させる
+            setTimeout(handleResize, 400); // ❺ リサイズイベントを一度発火させる
+        });
+
+        scene.add(markerRoot);
+
+        const directionalLight = new THREE.DirectionalLight(0xFFFFFF);
+        directionalLight.position.set(1, 0, 1);
+        scene.add(directionalLight);
+
+        let count = 0;
+        let flycount = 0;
+        let kaze = 0.1;
+        let m01Flg = 1;
+        let seflg = false;
+
+        const atari_geometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+        const atari_material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        atari_material.opacity = 0;
+        atari_material.transparent = true;
+        const atari = new THREE.Mesh(atari_geometry, atari_material);
+        atari.position.set(-0.65, 0, 0.9);
+        markerRoot.add(atari);
+
+        const wall_geometry = new THREE.BoxGeometry(2, 0.1, 2);
+        const wall_material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        wall_material.opacity = 0;
+        wall_material.transparent = true;
+        const wall = new THREE.Mesh(wall_geometry, wall_material);
+        wall.position.set(0, 1, 0);
+        wall.name = "OBJECT001";
+        markerRoot.add(wall);
+
+
+
+
+        class CustomSinCurve extends THREE.Curve {
+
+            constructor(scale = 1) {
+                super();
+                this.scale = scale;
+            }
+
+            getPoint(t, optionalTarget = new THREE.Vector3()) {
+
+                const tx = Math.sin(2 * Math.PI * t) * 0.0125;
+                const ty = 0;
+                const tz = (t * 3 - 1.5) * 0.075;
+
+                return optionalTarget.set(tx, ty, tz).multiplyScalar(this.scale);
+            }
+        }
+
+
+        function createballn(x, y, z, bc) {
+            const path = new CustomSinCurve(10);
+            const geometry = new THREE.TubeGeometry(path, 100, 0.01, 36, false);
+            const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+            material.wireframe = true;
+            const mesh = new THREE.Mesh(geometry, material);
+
+            const ballngeometry = new THREE.SphereGeometry(0.5, 64, 32);
+            const ballnmaterial = new THREE.MeshBasicMaterial({ color: bc });
+            const balln = new THREE.Mesh(ballngeometry, ballnmaterial);
+            balln.position.z -= 0.7;
+            mesh.add(balln);
+
+            const sen_geometry = new THREE.TetrahedronGeometry(0.1, 0);
+            const sen_material = new THREE.MeshBasicMaterial({ color: bc });
+            const sen = new THREE.Mesh(sen_geometry, sen_material);
+            sen.rotation.set(Math.PI / 5, Math.PI / 4, Math.PI / 18);
+            sen.position.x = 0.06;
+            sen.position.z -= 0.15;
+            mesh.add(sen);
+
+            mesh.rotation.y -= 35 * (Math.PI / 180);
+            mesh.position.set(x, y, z);
+            return mesh;
+        }
+
+        const balln = createballn(0, 0, 0, 0xff5c00);
+        const balln1 = createballn(0.2, -0.4, 0.3, 0xff0000);
+        const balln2 = createballn(-0.35, -0.55, 0, 0x7fff00);
+        const balln3 = createballn(-0.92, -0.55, 0, 0x00bfff);
+        const balln4 = createballn(-0.62, 0, -0.2, 0xffff00);
+        balln1.rotation.y -= 15 * (Math.PI / 180);
+        balln1.rotation.x -= 30 * (Math.PI / 180);
+        balln2.rotation.y += 20 * (Math.PI / 180);
+        balln2.rotation.x -= 30 * (Math.PI / 180);
+        balln3.rotation.y += 50 * (Math.PI / 180);
+        balln3.rotation.x -= 30 * (Math.PI / 180);
+        balln4.rotation.y += 35 * (Math.PI / 180);
+
+        atari.add(balln);
+        balln.position.set(0.65, 0, -0.9);
+        atari.add(balln1);
+        balln1.position.set(0.85, -0.4, -0.6);
+        atari.add(balln2);
+        balln2.position.set(0.3, -0.55, -0.9);
+        atari.add(balln3);
+        balln3.position.set(-0.27, -0.55, -0.9);
+        atari.add(balln4);
+        balln4.position.set(0.03, 0, -1.1);
+
+        const listener = new THREE.AudioListener();
+        camera.add(listener);
+        const AudioLoader = new THREE.AudioLoader();
+        const kazeSound = new THREE.Audio(listener);
+        AudioLoader.load('./kaze2.mp3', function (buffer) {
+            kazeSound.setBuffer(buffer);
+            kazeSound.setLoop(false);
+            kazeSound.setVolume(0.5);
+
+        });
+        // const kazeSound = new THREE.Audio(listener);
+        // AudioLoader.load('./kaze3.mp3', function (buffer) {
+        //     kazeSound.setBuffer(buffer);
+        //     kazeSound.setLoop(false);
+        //     kazeSound.setVolume(0.5);
+
+        // });
+
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (count % 2 == 0) {
+                atari.rotation.y += kaze * (Math.PI / 180);
+            }
+            if (count % 140 == 0) {
+                kaze = kaze * -1;
+            }
+            count += 1;
+            if (m01Flg != 1) {
+                if (seflg == false) {
+                    kazeSound.play();
+                    seflg = true;
+                }
+                balln.position.x += 0.015;
+                balln.position.z -= flycount ** 2 * 0.0025;
+                balln1.position.x += 0.015;
+                balln1.position.y -= 0.01;
+                balln1.position.z -= flycount ** 2 * 0.0025;
+                balln2.position.y += 0.02;
+                balln2.position.z -= flycount ** 2 * 0.0025;
+                balln3.position.x -= 0.015;
+                balln3.position.y += 0.01;
+                balln3.position.z -= flycount ** 2 * 0.0025;
+                balln4.position.x -= 0.015;
+                balln4.position.y += 0.01;
+                balln4.position.z -= flycount ** 2 * 0.0025;
+                flycount += 0.05;
+            }
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        renderer.setAnimationLoop((delta) => {
+            if (arToolkitSource.ready) {
+                arToolkitContext.update(arToolkitSource.domElement);
+            }
+
+            renderer.render(scene, camera);
+        });
+
+        function handleResize() {
+            if (arToolkitSource.ready) {
+                arToolkitSource.onResize();
+                arToolkitSource.copySizeTo(renderer.domElement);
+            }
+
+            renderer.setPixelRatio(window.devicePixelRatio);
+        }
+
+        window.addEventListener("mousedown", function (ret) {
+            let mouseX = ret.clientX;                           // マウスのx座標
+            let mouseY = ret.clientY;                           // マウスのy座標
+            //console.log(mouseX + " : " + mouseY);
+            mouseX = (mouseX / window.innerWidth) * 2 - 1;    // -1 ～ +1 に正規化されたx座標
+            mouseY = -(mouseY / window.innerHeight) * 2 + 1;    // -1 ～ +1 に正規化されたy座標
+            let pos = new THREE.Vector3(mouseX, mouseY, 1);     // マウスベクトル
+            pos.unproject(camera);                              // スクリーン座標系をカメラ座標系に変換
+            // レイキャスタを作成（始点, 向きのベクトル）
+            let ray = new THREE.Raycaster(camera.position, pos.sub(camera.position).normalize());
+            let obj = ray.intersectObjects(scene.children, true);   // レイと交差したオブジェクトの取得
+            console.log(obj);
+            console.log(obj[0]);
+            if (obj.length > 0) {                                // 交差したオブジェクトがあれば
+                picked(obj[0].object.name);                       // ピックされた対象に応じた処理を実行
+                console.log(obj[0].object.name)
+                console.log("debug 001");
+            }
+            console.log("-----");
+        });
+
+        function picked(objName) {
+            console.log("objName = " + objName);
+            switch (objName) {
+                case "OBJECT001":
+                    console.log("OBJECT001 hit");
+                    m01Flg = -1 * m01Flg;
+                    break;
+                // case "OBJECT002":
+                //     console.log("OBJECT002 hit");
+
+                //     break;
+                // case "OBJECT003":
+                //     console.log("OBJECT003 hit");
+
+                //     break;
+                default:
+                    break;
+            }
+        }
+    </script>
+</body>
+
+</html>
